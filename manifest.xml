@@ -1,0 +1,22 @@
+<package>
+  <description brief="Ruby packages for collecting data from orocos tasks and sending them to a control statation">
+  
+  </description>
+  <author>Alexander Duda/Alexander.Duda@dfki.de</author>
+  <license></license>
+  <url>http://</url>
+  <logo>http://</logo>
+
+  <depend package="hoe" />
+  <depend package="hoe-yard" />
+  <depend package="rake-compiler" />
+  <depend package="utilrb" />
+  <!--
+   To add any dependencies use the depend tag
+  <depend package="dummy-dependency-0" />
+	...
+  <depend package="dummy-dependency-n-1" />
+  <depend package="dummy-dependency-n" />
+  -->
+  <depend package="orocos.rb" />
+</package>
