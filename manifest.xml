@@ -12,5 +12,5 @@
   <depend package="rake-compiler" />
   <depend package="utilrb" />
   <depend package="tools/orocos.rb" />
-  <depend package="websocket" />
+  <depend package="websocket-gem" />
 </package>

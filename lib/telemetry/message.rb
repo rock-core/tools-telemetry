@@ -18,7 +18,7 @@ module Telemetry
                 @annotations = message.annotations
                 @data = if @annotations[:type] == :typelib
                             begin
-                                Orocos.load_typekit_for @annotations[:type_name]
+                                Orocos.load_typekit_for @annotations[:type_name],false
                                 Orocos.registry.get(@annotations[:type_name]).wrap(message.data)
                             rescue Orocos::TypekitTypeNotFound => e
                                 e

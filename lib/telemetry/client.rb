@@ -1,6 +1,9 @@
 
 module Telemetry
     class Client < Orocos::Async::ObjectBase
+        WATCHDOG_PERIOD = 1.0  # in seconds
+        SERVER_TIMEOUT = 15.0  # in seconds
+
         class Stream
             attr_accessor :name
             attr_accessor :type
@@ -47,6 +50,7 @@ module Telemetry
             @name_service = Orocos::Local::NameService.new
             @name_service.name = "Telemetry"
             @name_service_async.name = "Telemetry"
+            @last_alive = Time.now
 
             @ios.each do |io|
                 p = Proc.new do |str,error|
@@ -63,22 +67,31 @@ module Telemetry
                         Vizkit.warn e
                         next
                     end
+                    @last_alive = Time.now
                     emit_data(msg.data,msg.annotations)
 
                     if msg.annotations.has_key?(:port_name)
                         port_msg(msg)
                     elsif msg.annotations.has_key?(:property_name)
                         property_msg(msg)
-                    elsif msg.annotations.has_key?(:task_state)
+                    elsif msg.annotations.has_key?(:type) && msg.annotations[:type] == :task_state
+                        task = task_msg(msg)
+                        task.current_state = msg.data
+                    elsif msg.annotations.has_key?(:type) && msg.annotations[:type] == :error
                     end
                 end
                 event_loop.async_with_options(io.method(:gets),{:sync_key => io,:known_errors =>[IOError,Errno::EBADF,RuntimeError]},&p)
             end
-            event_loop.every(1) do 
+            event_loop.every(WATCHDOG_PERIOD) do
                 io = @ios.find do |io|
                     !io.closed?
                 end
-                unless io
+                if !io
+                    @name_service.each_task do |task|
+                        task.current_state = :NO_CONNECTION
+                    end
+                elsif Time.now - @last_alive > SERVER_TIMEOUT
+                    io = @ios.each &:close
                     @name_service.each_task do |task|
                         task.current_state = :NO_CONNECTION
                     end
@@ -98,7 +111,6 @@ module Telemetry
                        @name_service_async.register t
                        t
                    end
-            task.current_state = :REACHABLE if task.current_state == :NO_CONNECTION
             task
         end
 

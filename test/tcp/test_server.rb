@@ -9,6 +9,7 @@ describe Telemetry::TCP::Server do
     after do
     end
 
+    # Broken test because of web socket protocol !!!
     describe "write" do
         it "should write data on the given tcp port" do
             server = Telemetry::TCP::Server.new(20001)

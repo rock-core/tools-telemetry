@@ -12,7 +12,7 @@ module Telemetry
             # blocking call waits until a full frame was received
             def gets()
                 connect
-                while !@socket.closed?
+                while @socket && !@socket.closed?
                     data = begin
                                @socket.recv(10240)
                            rescue Errno::ECONNRESET
