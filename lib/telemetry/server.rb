@@ -5,37 +5,45 @@ module Telemetry
         FORCE_REFRESH_PERIOD = 10.0 # in seconds - this is also used as keep alive signal
         WATCHDOG_PERIOD = 1.0 # in seconds
 
+        ObjectInfo = Struct.new(:id,:listeners,:last_refresh)
+
         def initialize(io=TCP::Server.new(20001))
             super(self.class.name,Orocos::Async.event_loop)
             @io = io
-            @last_refresh = Hash.new
             @objects = Hash.new
+
             event_loop.every WATCHDOG_PERIOD do
-                @last_refresh.each_pair do |key,val|
-                    if(Time.now-val > FORCE_REFRESH_PERIOD)
-                        Array(@objects[key]).each do |listener|
+                @objects.each_pair do |key,val|
+                    if(Time.now-val.last_refresh > FORCE_REFRESH_PERIOD)
+                        Array(val.listeners).each do |listener|
                             next if !listener || !listener.last_args
                             listener.call *listener.last_args
                         end
                     end
                 end
             end
+
+            annotations = {:type => :error}
+            event_loop.on_error(Exception) do |e|
+                write_nonblock(0,e,annotations) do |bytes,error|
+                end
+            end
         end
 
-        def write_msg(msg = Outgoing::Message.new)
-            @io.write msg.serialize
+        def write_msg(id,msg = Outgoing::Message.new)
+            @io.write id,msg.serialize
         end
 
-        def write_msg_nonblock(msg = Outgoing::Message.new)
-            @io.write_nonblock msg.serialize
+        def write_msg_nonblock(id,msg = Outgoing::Message.new,&block)
+            @io.write_nonblock id,msg.serialize,&block
         end
 
-        def write(obj,annotations={})
-            write_msg(Outgoing::Message.new(obj,annotations))
+        def write(id,obj,annotations={})
+            write_msg(id,Outgoing::Message.new(obj,annotations))
         end
 
-        def write_nonblock(obj,annotations={})
-            write_msg_nonblock(Outgoing::Message.new(obj,annotations))
+        def write_nonblock(id,obj,annotations={},&block)
+            write_msg_nonblock(id,Outgoing::Message.new(obj,annotations),&block)
         end
 
         def forward(obj,period)
@@ -55,33 +63,35 @@ module Telemetry
             annotations[:task_name] = task.name
             annotations[:period] = period
             listener1 = task.on_state_change() do |state|
+                next unless task.reachable?
                 annotations[:type] = :task_state
-                write_nonblock(state,annotations)
-                @last_refresh[task] = Time.now
+                write_nonblock(@objects[task].id,state,annotations)
+                @objects[task].last_refresh = Time.now
             end
             listener2 = task.on_error() do |error|
+                # retransmit errors
                 annotations[:type] = :error
-                write_nonblock(error,annotations)
-                @last_refresh[task] = Time.now
+                write_nonblock(@objects[task].id,error,annotations)
+                @objects[task].last_refresh = Time.now
             end
             listener3 = task.on_port_reachable() do |port_name|
                 forward_port(task.port(port_name,:period => period),period)
-                @last_refresh[task] = Time.now
+                @objects[task].last_refresh = Time.now
             end
             listener4 = task.on_port_unreachable() do |port_name|
                 remove(task.port(port_name))
-                @last_refresh[task] = Time.now
             end
             listener5 = task.on_property_reachable() do |property_name|
                 forward_property(task.property(property_name),period)
-                @last_refresh[task] = Time.now
             end
             listener6 = task.on_property_unreachable() do |property_name|
                 remove(task.property(property_name))
-                @last_refresh[task] = Time.now
             end
-            @objects[task] = [listener1,listener2]
-            @last_refresh[task] = Time.now
+            listener7 = task.on_unreachable() do
+                annotations[:type] = :unreachable
+                write_nonblock(0,nil,annotations)
+            end
+            @objects[task] = ObjectInfo.new(@objects.size,[listener1,listener2],Time.now)
         end
 
         def forward_port(port,period)
@@ -90,16 +100,19 @@ module Telemetry
             annotations[:port_name] = port.name
             annotations[:period] = period
 
-            # ignore input ports
             port.once_on_reachable do
+                # ignore input ports
                 next if port.respond_to?(:input?) && port.input?
-                puts "listener #{port.full_name}"
-                @objects[port] = port.on_raw_data(:period => period) do |data|
+                Telemetry.info "forwarding #{port.full_name}"
+                listener = port.on_raw_data(:period => period) do |data|
+                    next unless port.reachable? # this is needed because of watchdog
                     annotations[:type_name] = port.type_name
-                    write_nonblock(data,annotations)
-                    @last_refresh[port] = Time.now
+                    write_nonblock(@objects[port].id,data,annotations) do |bytes,error|
+                        obj = @objects[port]
+                        obj.last_refresh = Time.now if obj
+                    end
                 end
-                @last_refresh[port] = Time.now
+                @objects[port] = ObjectInfo.new(@objects.size,listener,Time.now)
             end
         end
 
@@ -108,13 +121,17 @@ module Telemetry
             annotations[:task_name] = property.task.name
             annotations[:property_name] = property.name
             annotations[:period] = period
+
+            Telemetry.info "forwarding #{property.full_name}"
             listener = property.on_raw_change(:period => period) do |data|
                 annotations[:type_name] = property.type_name
-                write_nonblock(data,annotations)
-                @last_refresh[property] = Time.now
+                next unless property.reachable? # this is needed because of watchdog
+                write_nonblock(@objects[property].id,data,annotations) do |bytes,error|
+                    obj = @objects[property]
+                    obj.last_refresh = Time.now if obj
+                end
             end
-            @objects[property] = listener
-            @last_refresh[property] = Time.now
+            @objects[property] = ObjectInfo.new(@objects.size,listener,Time.now)
         end
 
         def forwarding?(obj)
@@ -122,12 +139,9 @@ module Telemetry
         end
 
         def remove(obj)
-            Array(@objects[obj]).map(&:stop)
+            return unless @objects[obj]
+            Array(@objects[obj].listeners).map(&:stop)
             @objects.delete(obj)
-            @last_refresh.delete(obj)
-        end
-
-        def connected?
         end
 
         def close

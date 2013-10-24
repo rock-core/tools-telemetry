@@ -3,14 +3,14 @@ require 'websocket'
 module Telemetry
     module TCP
         class Server < ::Orocos::Async::ObjectBase
-            attr_accessor :timeout
-            define_events :connected, :disconnected,:ip_disconnected,:port_disconnected,:port_connected
+            TIME_TO_LIVE = 0.1   # message is removed if transmission has not started after n seconds
 
+            define_events :connected, :disconnected,:ip_disconnected,:port_disconnected,:port_connected
             def initialize(port)
                 super(self.class.name,::Orocos::Async.event_loop)
-                @timeout = 5.0
                 @server = TCPServer.open(port)
                 @server.setsockopt(:SOCKET, :REUSEADDR, true)
+                @server.setsockopt(Socket::IPPROTO_TCP, Socket::TCP_NODELAY,false)
                 @clients = Hash.new do |h,key|
                     h[key] = []
                 end
@@ -22,9 +22,12 @@ module Telemetry
                     # do not do handshake to prevent traffic to the robot
                     # which is not allowed by the spacebot rules !!!
                     if !error && client
+                        client.setsockopt(Socket::IPPROTO_TCP, Socket::TCP_NODELAY, false)
                         @clients[client.remote_address.ip_address] << client
                         emit_connected client
                         emit_port_connected client.remote_address.ip_port
+                    else
+                        Telemetry.error e
                     end
                 end
                 event_loop.async_with_options(@server.method(:accept),{:sync_key => @server},&p)
@@ -36,7 +39,7 @@ module Telemetry
                             emit_ip_disconnected key if ports.empty?
                         end
                         emit_port_disconnected client.remote_address.ip_port
-                    rescue Errno::ENOTCONN
+                    rescue Errno::ENOTCONN,IOError
                     end
                 end
 
@@ -78,53 +81,53 @@ module Telemetry
                 true
             end
 
-            def write(string)
+            def write(id,string)
+                frame = WebSocket::Frame::Outgoing::Server.new(:data => string.to_s,:type => :binary)
+                raise "WebSocket frame type is not supported by the selected draft!" unless frame.support_type?
+                msg = frame.to_s
+
                 #write string to each ip address
-                @clients.each_key do |key|
-                    #find non busy socket
-                    bytes = nil
-                    time = Time.now
-                    while !bytes
-                        @clients[key].find do |s|
+                total_bytes = 0
+                @clients.each_pair do |key,client|
+                    next if client.empty?
+
+                    # select socket
+                    id_temp = id%(client.size)
+                    s = client[id_temp]
+                    bytes = msg.size
+
+                    # get unique access to the socket
+                    event_loop.sync_timeout(s,TIME_TO_LIVE) do
+                        # send hole message
+                        while bytes != 0
                             begin
-                                next if event_loop.thread_pool.sync_keys.include?(s) 
-                                if s.closed?
-                                    event_loop.call do
-                                        emit_disconnected s
-                                    end
-                                    next
-                                end
-                                bytes = event_loop.sync(s,s) do |s|
-                                    # construct frame
-                                    frame = WebSocket::Frame::Outgoing::Server.new(:data => string.to_s,:type => :binary)
-                                    raise "WebSocket frame type is not supported by the selected draft!" unless frame.support_type?
-                                    s.send(frame.to_s,0)
-                                end
-                            rescue Errno::EPIPE,Errno::ECONNRESET
+                                b = s.syswrite(msg[msg.size-bytes..-1])
+                                bytes -= b
+                                total_bytes += b
+                            rescue Errno::EBADF,Errno::EPIPE,Errno::ECONNRESET,IOError => e
+                                Telemetry.warn "error on io: #{e}"
+                                s.close unless s.closed?
+                            rescue Errno::EAGAIN
+                                Telemetry.warn "try again"
+                                sleep 0.1
+                                next
+                            end
+                            if s.closed?
                                 event_loop.call do
                                     emit_disconnected s
                                 end
-                                next
+                                break
                             end
                         end
-                        unless bytes
-                            Telemetry.warn "timeout"
-                            return
-                            raise "timeout" if(Time.now-time) > timeout
-                            sleep 0.05
-                        end
                     end
-                    bytes
                 end
+                total_bytes
             end
 
-            def write_nonblock(string)
+            def write_nonblock(id,string,&block)
                 #write string to each ip address
-                @clients.each_pair do |key,sockets|
-                    next if sockets.empty?
-                    event_loop.async(self.method(:write),string) do |bytes,error|
-                        # TODO do some error handling
-                    end
+                event_loop.async_with_options(self.method(:write),{:known_errors=>[Timeout::Error]},id,string) do |bok,error|
+                    block.call(bok,error) if block_given?
                 end
             end
         end

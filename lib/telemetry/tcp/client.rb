@@ -21,17 +21,15 @@ module Telemetry
                         data = begin
                                    @socket.recv(640000)
                                rescue Errno::ECONNRESET => e
-                                   puts "close socket error"
+                                   Telemetry.warn "close socket because of: #{e}"
                                    close
-                                   Telemetry.error e
                                    return
                                end
                         if !data || data.empty?
-                            puts "empty data close socket"
+                            Telemetry.warn "close socket: empty data package"
                             close
                             return
                         end
-                        puts "#{@socket} #{data.size}"
                         @frame << data
                         f = @frame.next
                         return f.to_s if f

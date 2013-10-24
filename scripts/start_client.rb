@@ -1,7 +1,7 @@
 require 'telemetry'
 require 'vizkit'
-#host = "10.250.3.30"
-host = "192.168.56.102"
+host = "10.250.3.30"
+#host = "192.168.56.102"
 
 clients = []
 0.upto 4 do

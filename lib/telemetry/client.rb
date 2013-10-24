@@ -72,8 +72,6 @@ module Telemetry
                           end
                     event_loop.async_with_options(io.method(:gets),{:sync_key => io,:known_errors =>[IOError,Errno::EBADF]},&p)
                     next unless msg
-
-                    puts "#{msg.annotations[:task_name]} size: #{str.size}"
                     emit_data(msg.data,msg.annotations)
 
                     if msg.annotations.has_key?(:port_name)
@@ -83,7 +81,15 @@ module Telemetry
                     elsif msg.annotations.has_key?(:type) && msg.annotations[:type] == :task_state
                         task = task_msg(msg)
                         task.current_state = msg.data
+                    elsif msg.annotations.has_key?(:type) && msg.annotations[:type] == :task_unreachable
+                        task = task_msg(msg)
+                        task.current_state = :Unreachable
                     elsif msg.annotations.has_key?(:type) && msg.annotations[:type] == :error
+                        Telemetry.warn "Server Eventloop: #{msg.data}"
+                        if msg.annotations.has_key?(:task_name)
+                            task = task_msg(msg)
+                            task.current_state=msg.data.to_s
+                        end
                     end
                 end
                 event_loop.async_with_options(io.method(:gets),{:sync_key => io,:known_errors =>[IOError,Errno::EBADF,RuntimeError]},&p)
