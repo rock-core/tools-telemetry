@@ -2,15 +2,14 @@
 module Telemetry
     class Client < Orocos::Async::ObjectBase
         WATCHDOG_PERIOD = 1.0  # in seconds
-        SERVER_TIMEOUT = 15.0  # in seconds
+        SERVER_TIMEOUT = 120.0  # in seconds
 
         class Stream
             attr_accessor :name
             attr_accessor :type
             attr_accessor :typename
             attr_accessor :size
-            attr_accessor :metadata
-
+            attr_accessor :metadata 
             def initialize(name,type,metadata={})
                 @type = type
                 @name = name
@@ -50,24 +49,31 @@ module Telemetry
             @name_service = Orocos::Local::NameService.new
             @name_service.name = "Telemetry"
             @name_service_async.name = "Telemetry"
-            @last_alive = Time.now
+            @last_alive = nil
 
             @ios.each do |io|
                 p = Proc.new do |str,error|
-                    if error
-                        io.close
-                        next
-                    end
-                    event_loop.async_with_options(io.method(:gets),{:sync_key => io,:known_errors =>[IOError,Errno::EBADF]},&p)
-
-                    next unless str
-                    begin
-                        msg = Incoming::Message.new(str)
-                    rescue Exception => e
-                        Vizkit.warn e
-                        next
-                    end
                     @last_alive = Time.now
+                    if error
+                        puts error
+                        io.close unless io.closed?
+                    end
+                    msg = begin
+                              Incoming::Message.new(str) if str
+                          rescue ArgumentError => e
+                              Vizkit.warn e
+                              nil
+                          rescue Exception => e
+                              puts e.class
+                              io.close
+                              puts "message broken puts #{str[0..100].inspect}"
+                              Vizkit.error e
+                              nil
+                          end
+                    event_loop.async_with_options(io.method(:gets),{:sync_key => io,:known_errors =>[IOError,Errno::EBADF]},&p)
+                    next unless msg
+
+                    puts "#{msg.annotations[:task_name]} size: #{str.size}"
                     emit_data(msg.data,msg.annotations)
 
                     if msg.annotations.has_key?(:port_name)
@@ -88,12 +94,13 @@ module Telemetry
                 end
                 if !io
                     @name_service.each_task do |task|
-                        task.current_state = :NO_CONNECTION
+                        task.current_state = :TIMEOUT
                     end
-                elsif Time.now - @last_alive > SERVER_TIMEOUT
-                    io = @ios.each &:close
+                elsif @last_alive && Time.now - @last_alive > SERVER_TIMEOUT
+                    @last_alive = nil
+                    @ios.map &:close
                     @name_service.each_task do |task|
-                        task.current_state = :NO_CONNECTION
+                        task.current_state = :TIMEOUT
                     end
                 end
             end

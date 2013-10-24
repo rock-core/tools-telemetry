@@ -19,7 +19,12 @@ module Telemetry
                 @data = if @annotations[:type] == :typelib
                             begin
                                 Orocos.load_typekit_for @annotations[:type_name],false
-                                Orocos.registry.get(@annotations[:type_name]).wrap(message.data)
+				if @annotations[:type_name] == "/transformer/TransformerStatus" || @annotations[:type_name] == "/aggregator/StreamAlignerStatus"
+				   @annotations = Hash.new
+                                   nil
+				else
+                                   Orocos.registry.get(@annotations[:type_name]).wrap(message.data)
+                                end
                             rescue Orocos::TypekitTypeNotFound => e
                                 e
                             end

@@ -1,4 +1,5 @@
 require 'websocket'
+require 'thread'
 
 module Telemetry
     module TCP
@@ -7,24 +8,34 @@ module Telemetry
                 @host = host
                 @port = port
                 @socket = nil
+                @mutex = Mutex.new
             end
 
             # blocking call waits until a full frame was received
             def gets()
                 connect
-                while @socket && !@socket.closed?
-                    data = begin
-                               @socket.recv(10240)
-                           rescue Errno::ECONNRESET
-                           end
-                    if !data || data.empty?
-                        close
-                        connect
-                        next
-                    end
-                    @frame << data
+                @mutex.synchronize do
                     f = @frame.next
                     return f.to_s if f
+                    while !@socket.closed?
+                        data = begin
+                                   @socket.recv(640000)
+                               rescue Errno::ECONNRESET => e
+                                   puts "close socket error"
+                                   close
+                                   Telemetry.error e
+                                   return
+                               end
+                        if !data || data.empty?
+                            puts "empty data close socket"
+                            close
+                            return
+                        end
+                        puts "#{@socket} #{data.size}"
+                        @frame << data
+                        f = @frame.next
+                        return f.to_s if f
+                    end
                 end
             end
 
@@ -38,16 +49,17 @@ module Telemetry
 
             def close
                 @socket.close unless closed?
-                @socket = nil
             end
 
             def connect
-                while !@socket
+                while !@socket || @socket.closed?
                     begin
                         reset
-                    rescue Errno::ECONNREFUSED,Errno::ECONNRESET
-                        @socket = nil
+                    rescue Errno::ECONNREFUSED,Errno::ECONNRESET,Errno::ECONNABORTED
                         Vizkit.warn "#{self}: connection refused to #{@host}:#{@port}. Trying again in 1 second"
+                        sleep 1
+                    rescue Errno::EHOSTUNREACH
+                        Vizkit.warn "#{self}: no route to #{@host}:#{@port}. Trying again in 1 second"
                         sleep 1
                     end
                 end
@@ -55,8 +67,10 @@ module Telemetry
 
             def reset
                 close
-                @socket = TCPSocket.open(@host,@port)
-                @frame = WebSocket::Frame::Incoming::Server.new()
+                @mutex.synchronize do
+                    @socket = TCPSocket.open(@host,@port)
+                    @frame = WebSocket::Frame::Incoming::Server.new()
+                end
             end
         end
     end
