@@ -1,30 +1,22 @@
 require 'telemetry'
-require 'orocos/log'
-require 'vizkit'
 
+POLL_PERIOD = 1.0 # in seconds
 Orocos.initialize
+
+# start default tcp server on port 20001
 server = Telemetry::Server.new
 
+# report errors on the console
 name_service = Orocos::Async::CORBA.name_service
-name_service.on_task_added do |task_name|
-end
 name_service.on_error do |error|
     Vizkit.error error
 end
-#Orocos::Async.event_loop.on_error(Orocos::CORBA::ComError) do |e|
-#    Vizkit.error e
-#end
 
-Orocos::Async.name_service.on_task_added do |name|
+# forward all tasks on the global name service
+name_service.on_task_added do |name|
     puts "forward #{name}"
-    server.forward(Orocos::Async.name_service.proxy(name),1.0)
+    server.forward(Orocos::Async.name_service.proxy(name),POLL_PERIOD)
 end
 
-#Orocos::Async.name_service.on_task_removed do |name|
-#    puts "remove #{name}"
-#    server.remove(Orocos::Async.name_service.proxy(name))
-#end
-
+# start eventloop
 Orocos::Async.exec
-
-
