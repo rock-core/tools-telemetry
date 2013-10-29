@@ -136,7 +136,7 @@ module Telemetry
             port_name = msg.annotations[:port_name]
             raise "port has no name" if !port_name || port_name.empty?
             if !task.has_port?(port_name)
-                stream = Stream.new("#{task.name}.#{port_name}",msg.data.class)
+                stream = Stream.new("#{task.basename}.#{port_name}",msg.data.class)
                 task.add_port("Telemetry",stream).tracked = true
             end
             port = task.port(port_name)
@@ -153,7 +153,7 @@ module Telemetry
             prop_name = msg.annotations[:property_name]
             raise "property has no name" if !prop_name|| prop_name.empty?
             if !task.has_property?(prop_name)
-                stream = Stream.new("#{task.name}.#{prop_name}",msg.data.class,{"rock_stream_type" => "property"})
+                stream = Stream.new("#{task.basename}.#{prop_name}",msg.data.class,{"rock_stream_type" => "property"})
                 task.add_property("Telemetry",stream).tracked = true
             end
             prop = task.property(prop_name)
