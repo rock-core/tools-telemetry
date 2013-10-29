@@ -1,9 +1,9 @@
 require 'telemetry'
 require 'vizkit'
 
-host = "10.250.3.30"
+#host = "10.250.3.30"
 port = "20001"
-#host = "192.168.56.102"
+host = "192.168.56.102"
 
 Orocos.initialize
 

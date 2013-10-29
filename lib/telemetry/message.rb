@@ -1,4 +1,5 @@
 require 'yaml'
+require 'base64'
 
 module Telemetry
     # Telemetry base message
@@ -23,7 +24,8 @@ module Telemetry
 				   @annotations = Hash.new
                                    nil
 				else
-                                   Orocos.registry.get(@annotations[:type_name]).wrap(message.data)
+                                   data = Base64.decode64(message.data)
+                                   Orocos.registry.get(@annotations[:type_name]).wrap(data)
                                 end
                             rescue Orocos::TypekitTypeNotFound => e
                                 e
@@ -47,7 +49,7 @@ module Telemetry
                 msg.data = if data.is_a?(::Typelib::Type)
                                annotations[:type] ||= :typelib
                                annotations[:type_name] ||= data.class.name
-                               data.to_byte_array
+                               Base64.encode64(data.to_byte_array)
                            else
                                data.to_s
                            end

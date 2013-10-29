@@ -30,8 +30,10 @@ module Telemetry
             end
         end
 
-        def write_msg(id,msg = Outgoing::Message.new)
-            @io.write id,msg.serialize
+        def write_msg(id,msg = Outgoing::Message.new)         
+           @io.write id,msg.serialize
+        rescue Exception => e
+            puts "cannot serialize #{msg} because of #{e}"
         end
 
         def write_msg_nonblock(id,msg = Outgoing::Message.new,&block)
