@@ -26,7 +26,7 @@ describe Telemetry::Server do
             t.apply_changes_from_converted_types
 
             Orocos::Async.steps
-            @server.write t
+            @server.write 0, t
             obj=nil
             @client.on_data do |data,annotations|
                 obj = data
@@ -46,7 +46,7 @@ describe Telemetry::Server do
             t.apply_changes_from_converted_types
 
             Orocos::Async.steps
-            @server.write_nonblock t
+            @server.write_nonblock 0, t
             obj=nil
             @client.on_data do |data,annotations|
                 obj = data
