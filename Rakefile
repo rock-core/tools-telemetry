@@ -7,7 +7,7 @@ begin
     Hoe::plugin :yard
 
     hoe_spec = Hoe.spec package_name do
-        self.version = ''
+        self.version = '0.1'
         self.developer "Alexander Duda", "Alexander.Duda@dfki.de"
         self.extra_deps <<
             ['rake', '>= 0.8.0'] <<
