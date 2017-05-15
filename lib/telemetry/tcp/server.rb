@@ -27,7 +27,7 @@ module Telemetry
                         emit_connected client
                         emit_port_connected client.remote_address.ip_port
                     else
-                        Telemetry.error e
+                        Telemetry.error error
                     end
                 end
                 event_loop.async_with_options(@server.method(:accept),{:sync_key => @server},&p)
