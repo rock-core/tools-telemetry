@@ -21,7 +21,7 @@ describe Telemetry::Server do
 
     describe "write" do
         it "should write a typelib obj" do
-            t = Types::Base::Samples::LaserScan.new
+            t = Types.base.samples.LaserScan.new
             t.time = Time.now
             t.apply_changes_from_converted_types
 
@@ -41,7 +41,7 @@ describe Telemetry::Server do
 
     describe "write_nonblock" do
         it "should write a typelib obj in a nonblocking manner" do
-            t = Types::Base::Samples::LaserScan.new
+            t = Types.base.samples.LaserScan.new
             t.time = Time.now
             t.apply_changes_from_converted_types
 
@@ -63,8 +63,8 @@ describe Telemetry::Server do
     describe "forward_port" do
         it "should forward a orocos async port" do
 
-            task = Orocos::RubyTaskContext.new("test_ports")
-            port = task.create_output_port("laser_scan",Types::Base::Samples::LaserScan)
+            task = Orocos::RubyTasks::TaskContext.new("test_ports")
+            port = task.create_output_port("laser_scan",Types.base.samples.LaserScan)
 
             aport = Orocos::Async.get("test_ports").port("laser_scan")
             aport.wait
@@ -85,7 +85,7 @@ describe Telemetry::Server do
 
             # write samples to the task and check that both sinks are receiving
             # the data
-            t = Types::Base::Samples::LaserScan.new
+            t = Types.base.samples.LaserScan.new
             port.write t
             Orocos::Async.steps
             3.times do
@@ -111,8 +111,8 @@ describe Telemetry::Server do
     describe "forward_property" do
         it "should forward a orocos async property" do
 
-            task = Orocos::RubyTaskContext.new("test_property")
-            prop = task.create_property("laser",Types::Base::Samples::LaserScan)
+            task = Orocos::RubyTasks::TaskContext.new("test_property")
+            prop = task.create_property("laser",Types.base.samples.LaserScan)
             prop.write prop.new_sample.zero!
 
             t = Orocos::Async.get("test_property")
@@ -136,7 +136,7 @@ describe Telemetry::Server do
 
             # write samples to the task and check that both sinks are receiving
             # the data
-            t = Types::Base::Samples::LaserScan.new
+            t = Types.base.samples.LaserScan.new
             Orocos::Async.steps
             3.times do
                 # write data
@@ -160,9 +160,9 @@ describe Telemetry::Server do
     describe "forward_task" do
         it "should forward a orocos task" do
 
-            task = Orocos::RubyTaskContext.new("test_task")
-            port = task.create_output_port("laser_scan",Types::Base::Samples::LaserScan)
-            prop = task.create_property("laser_prop",Types::Base::Samples::LaserScan)
+            task = Orocos::RubyTasks::TaskContext.new("test_task")
+            port = task.create_output_port("laser_scan",Types.base.samples.LaserScan)
+            prop = task.create_property("laser_prop",Types.base.samples.LaserScan)
             prop.write prop.new_sample.zero!
 
             t = Orocos::Async.get("test_task")
@@ -197,7 +197,7 @@ describe Telemetry::Server do
 
             # write samples to the task and check that both sinks are receiving
             # the data
-            t = Types::Base::Samples::LaserScan.new
+            t = Types.base.samples.LaserScan.new
             Orocos::Async.steps
 
             # write data

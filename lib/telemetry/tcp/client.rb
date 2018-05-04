@@ -54,7 +54,7 @@ module Telemetry
                     begin
                         reset
                     rescue Errno::ECONNREFUSED,Errno::ECONNRESET,Errno::ECONNABORTED
-                        Vizkit.warn "#{self}: connection refused to #{@host}:#{@port}. Trying again in 1 second"
+                        Telemetry.warn "#{self}: connection refused to #{@host}:#{@port}. Trying again in 1 second"
                         sleep 1
                     rescue Errno::EHOSTUNREACH
                         Vizkit.warn "#{self}: no route to #{@host}:#{@port}. Trying again in 1 second"
