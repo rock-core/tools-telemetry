@@ -1,12 +1,10 @@
 = telemetry
 
-* http:// 
+* http://github.com/rock-core/tools-telemetry
 
 == DESCRIPTION:
 
-Ruby packages for collecting data from orocos tasks and sending them to a control statationription
-
-ription
+Ruby packages for collecting data from orocos tasks and sending them to a control station
 
 == FEATURES/PROBLEMS:
 
@@ -34,6 +32,3 @@ After checking out the source, run:
   and generate the RDoc.
 
 == LICENSE:
-
-* 
-
