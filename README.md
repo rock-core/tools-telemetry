@@ -1,6 +1,6 @@
 # telemetry
 
-* http://github.com/rock-core/tools-telemetry
+tools-telemetry :: http://github.com/rock-core/tools-telemetry
 
 ## DESCRIPTION:
 
